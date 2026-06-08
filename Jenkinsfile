@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     environment {
+        // Your Docker Hub repository name
         IMAGE = "manasnarayan/myapp"
     }
 
@@ -9,6 +10,7 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
+                    // Generates a unique timestamp tag so we don't just use 'latest'
                     TAG = sh(script: "date +%s", returnStdout: true).trim()
                     sh "docker build -t $IMAGE:$TAG ."
                 }
@@ -17,6 +19,7 @@ pipeline {
 
         stage('Push Image') {
             steps {
+                // Uses your saved Jenkins credentials to log into Docker Hub
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
                     sh """
                     echo \$P | docker login -u \$U --password-stdin
@@ -28,32 +31,37 @@ pipeline {
 
         stage('Update Deployment File & Push to Git') {
             steps {
+                // Uses your GitHub Personal Access Token saved in Jenkins
                 withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
                     script {
-                        // 1. Cleanly track the main branch
+                        // Ensure Jenkins pulls the absolute latest code from main first
                         sh "git checkout main"
                         sh "git pull origin main"
 
-                        // 2. THE EXACT SWAP: Finds yesterday's 'image: nginx:1.25' and automatically rewrites it to your new Docker Hub 'latest' image
-                        sh "sed -i 's|image: nginx:1.25|image: manasnarayan/myapp:latest|g' deployment.yaml"
+                        // THE AUTOMATION CONNECTION:
+                        // This finds yesterday's manual 'image: nginx:1.25' and automatically 
+                        // overwrites it with your brand new Docker Hub image and unique tag!
+                        sh "sed -i 's|image: nginx:1.25|image: $IMAGE:$TAG|g' deployment.yaml"
                         
-                        // 3. Configure Git identity for Jenkins
+                        // Set Git identity so Jenkins can commit
                         sh """
                         git config user.email "jenkins@example.com"
                         git config user.name "Jenkins CI"
                         """
                         
-                        // 4. Automatically commit and push back to GitHub
+                        // Automatically stage, commit, and push the updated YAML back to GitHub
                         sh """
                         git add deployment.yaml
                         if ! git diff-index --quiet HEAD --; then
-                            git commit -m "chore: automated update from nginx:1.25 to custom latest image [skip ci]"
+                            git commit -m "chore: automated update from nginx:1.25 to $IMAGE:$TAG [skip ci]"
                             git push https:\${GH_USER}:\${GH_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main
                         else
-                            echo "No changes detected. Skipping commit."
+                            echo "No changes detected in deployment.yaml. Skipping commit."
                         fi
                         """
                     }
                 }
             }
         }
+    }
+}
