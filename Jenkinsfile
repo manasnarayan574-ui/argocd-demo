@@ -2,63 +2,51 @@ pipeline {
     agent any
 
     environment {
-        IMAGE = "manasnarayan/myapp"
-        TAG   = "${BUILD_NUMBER}"
+        // Your GitHub repository details
+        GIT_REPO_URL = 'github.com/manasnarayan574-ui/argocd-demo.git'
+        DEPLOYMENT_FILE = 'deployment.yaml'
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/manasnarayan574-ui/argocd-demo.git'
+                // Pulls your repository code cleanly
+                git url: "https://${GIT_REPO_URL}", branch: 'main'
             }
         }
 
-        stage('Build Image') {
+        stage('Build & Push Docker Image') {
             steps {
-                script {
-                    sh "docker build -t $IMAGE:$TAG ."
-                }
-            }
-        }
-
-        stage('Push Image to Docker Hub') {
-            steps {
-                script {
-                    // This matches your ID 'dockerhub-creds' perfectly
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "echo \$PASS | docker login -u \$USER --password-stdin"
-                        sh "docker push $IMAGE:$TAG"
-                    }
-                }
-            }
-        }
-
-        stage('Update Deployment YAML') {
-            steps {
-                script {
-                    sh "sed -i 's|image:.*|image: ${IMAGE}:${TAG}|g' deployment.yaml"
-                }
+                // Uses the credential ID we just fixed ('github-token' handles your hub login or git push tokens)
+                // We are tagging the image using the Jenkins build number
+                sh "docker build -t nginx:v${BUILD_NUMBER} ."
             }
         }
 
         stage('Update Git Deployment Tag') {
-    steps {
-        // 'github-token' must match the exact ID of your credential in Jenkins
-        withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
-            script {
-                // 1. Update the local file
-                sh "sed -i 's|image: nginx:.*|image: nginx:v${BUILD_NUMBER}|g' deployment.yaml"
-                
-                // 2. Configure Git identity so the commit doesn't fail
-                sh """
-                    git config user.email "jenkins@yourdomain.com"
-                    git config user.name "Jenkins CI"
-                    git add deployment.yaml
-                    git commit -m "chore: automated image tag update to v${BUILD_NUMBER} [skip ci]"
-                """
-                
-                // 3. The exact syntax that prevents the 'Bad hostname' error:
-                sh "git push https://${GIT_USER}:${GIT_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main"
+            steps {
+                // This securely injects your github-token credentials without breaking Groovy syntax
+                withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+                    script {
+                        echo "Modifying deployment.yaml with tag v${BUILD_NUMBER}..."
+                        
+                        // Changes line 17 'image: nginx:1.25' to 'image: nginx:v<build_number>'
+                        sh "sed -i 's|image: nginx:.*|image: nginx:v${BUILD_NUMBER}|g' ${DEPLOYMENT_FILE}"
+                        
+                        echo "Configuring local git user..."
+                        sh """
+                            git config user.email "jenkins@yourdomain.com"
+                            git config user.name "Jenkins CI"
+                        """
+                        
+                        echo "Committing and pushing changes..."
+                        sh """
+                            git add ${DEPLOYMENT_FILE}
+                            git commit -m "chore: automated image tag update to v${BUILD_NUMBER} [skip ci]"
+                            git push https://${GIT_USER}:${GIT_TOKEN}@${GIT_REPO_URL} HEAD:main
+                        """
+                    }
+                }
             }
         }
     }
