@@ -58,15 +58,17 @@ pipeline {
     steps {
         script {
             withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+                // Configure identity
                 sh "git config user.email 'jenkins@automation.com'"
                 sh "git config user.name 'Jenkins-CI-Bot'"
                 
+                // Add and Commit
                 sh "git add deployment.yaml"
                 sh "git commit -m 'Automated manifest update: Image Tag ${IMAGE_TAG} [skip ci]'"
                 
-                // This is the most reliable way to push securely
-                sh "git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@${GITHUB_REPO_URL}"
-                sh "git push origin HEAD:main"
+                // CRITICAL: Push using a clean URL without variable injection in the command
+                // This tells git to use your creds just for this operation
+                sh "git push https://${GIT_USER}:${GIT_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main"
             }
         }
     }
