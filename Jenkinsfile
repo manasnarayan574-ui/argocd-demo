@@ -28,31 +28,30 @@ pipeline {
 
         stage('Update Deployment File & Push to Git') {
             steps {
-                // 1. Inject your GitHub credentials safely
                 withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
                     script {
-                        // 2. Update the deployment.yaml file with the new image tag
-                        sh "sed -i 's|nginx:latest|$IMAGE:$TAG|g' deployment.yaml"
+                        // 1. Fix Detached HEAD by forcing git back to the main branch
+                        sh "git checkout main"
+
+                        // 2. Dynamic sed: Matches 'manasnarayan/myapp:' followed by any old tag, and updates it
+                        sh "sed -i 's|manasnarayan/myapp:[^ ]*|manasnarayan/myapp:$TAG|g' deployment.yaml"
                         
-                        // 3. Configure local git profile for the commit
                         sh """
                         git config user.email "jenkins@example.com"
                         git config user.name "Jenkins CI"
                         """
                         
-                        // 4. Commit the changes
+                        // 3. Smart Commit: Only commits if there are actual changes to prevent crashes
                         sh """
                         git add deployment.yaml
-                        git commit -m "chore: automated image tag update to $TAG [skip ci]"
-                        """
-                        
-                        // 5. Push back to your repository using the token safely
-                        sh """
-                        git push https://${GH_USER}:${GH_TOKEN}@github.com/${GH_USER}/argocd-demo.git HEAD:main
+                        if ! git diff-index --quiet HEAD --; then
+                            git commit -m "chore: automated image tag update to $TAG [skip ci]"
+                            git push https://${GH_USER}:${GH_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main
+                        else
+                            echo "No changes detected in deployment.yaml. Skipping git commit."
+                        fi
                         """
                     }
                 }
             }
         }
-    }
-}
