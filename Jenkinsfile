@@ -55,31 +55,19 @@ pipeline {
         }
 
         stage('Push Changes to GitHub') {
-            steps {
-                script {
-                    // Binds GitHub credentials to securely push code back to git without writing plain passwords
-                    withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDS_ID, usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
-                        
-                        // Setup local Git config for committing
-                        sh "git config user.email 'jenkins@example.com'"
-                        sh "git config user.name 'Jenkins CI'"
-                        
-                        // Stage, commit and push to the remote branch
-                        sh "git add deployment.yaml"
-                        sh "git commit -m 'Automated manifest update: Image Tag ${IMAGE_TAG} [skip ci]'"
-                        
-                        // Embed token into URL for authenticated push execution
-                        sh "git push https://${GIT_USER}:${GIT_TOKEN}@${GITHUB_REPO_URL} HEAD:main"
-                    }
-                }
+    steps {
+        script {
+            withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+                sh "git config user.email 'jenkins@automation.com'"
+                sh "git config user.name 'Jenkins-CI-Bot'"
+                
+                sh "git add deployment.yaml"
+                sh "git commit -m 'Automated manifest update: Image Tag ${IMAGE_TAG} [skip ci]'"
+                
+                // This is the most reliable way to push securely
+                sh "git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@${GITHUB_REPO_URL}"
+                sh "git push origin HEAD:main"
             }
-        }
-    }
-
-    post {
-        always {
-            echo "Cleaning up local images..."
-            sh "docker rmi ${DOCKER_IMAGE}:${IMAGE_TAG} || true"
         }
     }
 }
