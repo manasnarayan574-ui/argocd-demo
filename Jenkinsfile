@@ -7,7 +7,7 @@ pipeline {
         GITHUB_REPO_URL  = 'github.com/manasnarayan574-ui/argocd-demo.git'
         
         // Credentials IDs set up in Jenkins
-        DOCKER_CREDS_ID  = 'docker-hub-credentials'
+        DOCKER_CREDS_ID  = 'dockerhub-creds'
         GITHUB_CREDS_ID  = 'github-credentials'
         
         // Dynamic Tag based on Jenkins Build Number
