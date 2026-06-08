@@ -6,7 +6,6 @@ pipeline {
     }
 
     stages {
-
         stage('Build Image') {
             steps {
                 script {
@@ -20,7 +19,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
                     sh """
-                    echo $P | docker login -u $U --password-stdin
+                    echo \$P | docker login -u \$U --password-stdin
                     docker push $IMAGE:$TAG
                     """
                 }
@@ -30,19 +29,6 @@ pipeline {
         stage('Update Deployment File') {
             steps {
                 sh "sed -i 's|nginx:latest|$IMAGE:$TAG|g' deployment.yaml"
-            }
-        }
-
-        stage('Commit to GitHub') {
-            steps {
-                sh """
-                git config user.email "jenkins@test.com"
-                git config user.name "jenkins"
-
-                git add deployment.yaml
-                git commit -m "update image $TAG"
-                git push
-                """
             }
         }
     }
