@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Your Docker Hub repository name
         IMAGE = "manasnarayan/myapp"
     }
 
@@ -10,7 +9,6 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
-                    // Generates a unique timestamp tag
                     TAG = sh(script: "date +%s", returnStdout: true).trim()
                     sh "docker build -t $IMAGE:$TAG ."
                 }
@@ -19,7 +17,6 @@ pipeline {
 
         stage('Push Image') {
             steps {
-                // Logs into Docker Hub using your saved credentials
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
                     sh """
                     echo \$P | docker login -u \$U --password-stdin
@@ -31,25 +28,26 @@ pipeline {
 
         stage('Update Deployment File & Push to Git') {
             steps {
-                // Uses your GitHub Personal Access Token saved in Jenkins
                 withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
                     script {
-                        // Cleanly pull and track the main branch first
-                        sh "git checkout main"
-                        sh "git pull origin main"
-
-                        // THE AUTOMATION CONNECTION:
-                        // Finds yesterday's manual 'image: nginx:1.25' and rewrites it to your new Docker Hub image
-                        sh "sed -i 's|image: nginx:1.25|image: $IMAGE:$TAG|g' deployment.yaml"
-                        
-                        // Set Git identity so Jenkins can make the commit
+                        // 1. Set Git identity first so Git doesn't complain during pulls/merges
                         sh """
                         git config user.email "jenkins@example.com"
                         git config user.name "Jenkins CI"
-                        git add deployment.yaml
                         """
+
+                        // 2. Clear out any local tracking conflicts, checkout main cleanly
+                        sh "git checkout -B main"
                         
-                        // Checks if changes exist, then commits and pushes using clean string concatenation to fix the SSH bug
+                        // 3. THE FIX: Tells Git exactly how to reconcile branches using fast-forward only
+                        sh "git pull origin main --ff-only"
+
+                        // 4. Update the image tag automatically
+                        sh "sed -i 's|image: nginx:1.25|image: $IMAGE:$TAG|g' deployment.yaml"
+                        
+                        sh "git add deployment.yaml"
+                        
+                        // 5. Commit and push back using clean string concatenation
                         if (sh(script: "git diff-index --quiet HEAD --", returnStatus: true) != 0) {
                             sh "git commit -m 'chore: automated update from nginx:1.25 to $IMAGE:$TAG [skip ci]'"
                             sh 'git push https://' + GH_USER + ':' + GH_TOKEN + '@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main'
