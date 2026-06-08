@@ -11,9 +11,8 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Ensure we have a clean workspace
                 cleanWs()
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[credentialsId: env.GITHUB_CREDS, url: "https://${env.REPO_URL}"]]])
+                checkout scm
             }
         }
 
@@ -38,20 +37,21 @@ pipeline {
                     
                     withCredentials([usernamePassword(credentialsId: env.GITHUB_CREDS, usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
                         sh """
-                        # Basic Identity
                         git config user.email 'jenkins@automation.com'
                         git config user.name 'Jenkins-CI-Bot'
                         
-                        # Prepare Commit
                         git add deployment.yaml
-                        git commit -m 'Update image tag to ${tag} [skip ci]'
+                        git commit -m 'Update image tag to ${tag} [skip ci]' || echo 'No changes to commit'
                         
-                        # Forcefully reset origin to use the authenticated URL
-                        git remote remove origin
-                        git remote add origin https://${GIT_USER}:${GIT_TOKEN}@${env.REPO_URL}
+                        # Remove old origin safely
+                        git remote remove origin || true
                         
-                        # Explicitly push the local branch to the remote branch
-                        git push origin main:main
+                        # HARDCODED USERNAME: This prevents the Jenkins credential from injecting a space.
+                        # We only pull the GIT_TOKEN from the credentials block now.
+                        git remote add origin https://manasnarayan574-ui:${GIT_TOKEN}@${env.REPO_URL}
+                        
+                        # THE REFSPEC FIX: Push the detached HEAD directly to remote main
+                        git push origin HEAD:main
                         """
                     }
                 }
