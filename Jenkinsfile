@@ -26,9 +26,32 @@ pipeline {
             }
         }
 
-        stage('Update Deployment File') {
+        stage('Update Deployment File & Push to Git') {
             steps {
-                sh "sed -i 's|nginx:latest|$IMAGE:$TAG|g' deployment.yaml"
+                // 1. Inject your GitHub credentials safely
+                withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    script {
+                        // 2. Update the deployment.yaml file with the new image tag
+                        sh "sed -i 's|nginx:latest|$IMAGE:$TAG|g' deployment.yaml"
+                        
+                        // 3. Configure local git profile for the commit
+                        sh """
+                        git config user.email "jenkins@example.com"
+                        git config user.name "Jenkins CI"
+                        """
+                        
+                        // 4. Commit the changes
+                        sh """
+                        git add deployment.yaml
+                        git commit -m "chore: automated image tag update to $TAG [skip ci]"
+                        """
+                        
+                        // 5. Push back to your repository using the token safely
+                        sh """
+                        git push https://${GH_USER}:${GH_TOKEN}@github.com/${GH_USER}/argocd-demo.git HEAD:main
+                        """
+                    }
+                }
             }
         }
     }
