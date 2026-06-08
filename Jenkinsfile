@@ -42,21 +42,19 @@ pipeline {
             }
         }
 
-        stage('Commit & Push to GitHub') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'U', passwordVariable: 'P')]) {
-                    sh """
-                    git config user.email "jenkins@example.com"
-                    git config user.name "jenkins"
+        stage('Update GitHub') {
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'U', passwordVariable: 'P')]) {
+            sh """
+            git config user.email "jenkins@example.com"
+            git config user.name "jenkins"
 
-                    git add deployment.yaml
-                    git commit -m "update image to $IMAGE:$TAG" || echo "No changes to commit"
+            git add deployment.yaml
+            git commit -m "update image" || echo "no changes"
 
-                    git remote set-url origin https://$U:$P@github.com/manasnarayan574-ui/argocd-demo.git
-                    git push origin main
-                    """
-                }
-            }
+            git remote set-url origin https://${U}:${P}@github.com/ManasNarayan574-UI/argocd-demo.git
+            git push origin main
+            """
         }
     }
 }
