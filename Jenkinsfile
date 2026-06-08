@@ -41,21 +41,24 @@ pipeline {
             }
         }
 
-        stage('Push Changes to GitHub') {
-            steps {
-                script {
-                    // FIXED: Changed from 'github-token-creds' to match your actual ID: 'github-token'
-                    withCredentials([usernamePassword(credentialsId: 'github-token', passwordVariable: 'GITHUB_TOKEN', usernameVariable: 'GITHUB_USER')]) {
-                        
-                        sh "git config user.email 'jenkins@automation.com'"
-                        sh "git config user.name 'Jenkins CI'"
-                        
-                        sh "git add deployment.yaml"
-                        sh "git commit -m 'Automated sync: image tag updated to ${TAG} [skip ci]'"
-                        
-                        sh "git push https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main"
-                    }
-                }
+        stage('Update Git Deployment Tag') {
+    steps {
+        // 'github-token' must match the exact ID of your credential in Jenkins
+        withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+            script {
+                // 1. Update the local file
+                sh "sed -i 's|image: nginx:.*|image: nginx:v${BUILD_NUMBER}|g' deployment.yaml"
+                
+                // 2. Configure Git identity so the commit doesn't fail
+                sh """
+                    git config user.email "jenkins@yourdomain.com"
+                    git config user.name "Jenkins CI"
+                    git add deployment.yaml
+                    git commit -m "chore: automated image tag update to v${BUILD_NUMBER} [skip ci]"
+                """
+                
+                // 3. The exact syntax that prevents the 'Bad hostname' error:
+                sh "git push https://${GIT_USER}:${GIT_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main"
             }
         }
     }
