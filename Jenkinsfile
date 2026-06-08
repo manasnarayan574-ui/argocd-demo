@@ -30,23 +30,25 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
                     script {
-                        // 1. Fix Detached HEAD by forcing git back to the main branch
+                        // 1. Fix Detached HEAD by pulling latest changes and tracking main branch
                         sh "git checkout main"
+                        sh "git pull origin main"
 
-                        // 2. Dynamic sed: Matches 'manasnarayan/myapp:' followed by any old tag, and updates it
+                        // 2. Dynamic sed: Finds your image name with ANY old tag and replaces it with the new one
                         sh "sed -i 's|manasnarayan/myapp:[^ ]*|manasnarayan/myapp:$TAG|g' deployment.yaml"
                         
+                        // 3. Configure local git profile for Jenkins
                         sh """
                         git config user.email "jenkins@example.com"
                         git config user.name "Jenkins CI"
                         """
                         
-                        // 3. Smart Commit: Only commits if there are actual changes to prevent crashes
+                        // 4. Safety Check: Only commit and push if deployment.yaml actually changed
                         sh """
                         git add deployment.yaml
                         if ! git diff-index --quiet HEAD --; then
                             git commit -m "chore: automated image tag update to $TAG [skip ci]"
-                            git push https://${GH_USER}:${GH_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main
+                            git push https:\${GH_USER}:\${GH_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main
                         else
                             echo "No changes detected in deployment.yaml. Skipping git commit."
                         fi
@@ -55,3 +57,5 @@ pipeline {
                 }
             }
         }
+    }
+}
