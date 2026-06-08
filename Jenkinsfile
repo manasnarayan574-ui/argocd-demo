@@ -30,34 +30,25 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
                     script {
-                        // 1. Set Git identity
+                        // 1. Configure git settings
                         sh """
                         git config user.email "jenkins@example.com"
                         git config user.name "Jenkins CI"
+                        git checkout -B main
+                        git pull origin main --ff-only
                         """
 
-                        // 2. Configure Git to automatically inject credentials safely behind the scenes
-                        sh 'git config credential.helper "!f() { echo username=\\"\$GH_USER\\"; echo password=\\"\$GH_TOKEN\\"; }; f"'
-
-                        // 3. Cleanly pull track main branch 
-                        sh "git checkout -B main"
-                        sh "git pull origin main --ff-only"
-
-                        // 4. Update the image tag automatically
+                        // 2. Automatically update the YAML file
                         sh "sed -i 's|image: nginx:1.25|image: $IMAGE:$TAG|g' deployment.yaml"
-                        
                         sh "git add deployment.yaml"
                         
-                        // 5. Commit and push cleanly without putting credentials directly in the URL
+                        // 3. SAFE PUSH: Using single quotes around the shell command prevents Jenkins from mangling the URL strings
                         if (sh(script: "git diff-index --quiet HEAD --", returnStatus: true) != 0) {
-                            sh "git commit -m 'chore: automated update from nginx:1.25 to $IMAGE:$TAG [skip ci]'"
-                            sh "git push origin main"
+                            sh 'git commit -m "chore: automated update from nginx:1.25 to ${IMAGE}:${TAG} [skip ci]"'
+                            sh 'git push https://${GH_USER}:${GH_TOKEN}@github.com/manasnarayan574-ui/argocd-demo.git HEAD:main'
                         } else {
-                            echo "No changes detected in deployment.yaml. Skipping commit."
+                            echo "No changes to commit."
                         }
-
-                        // 6. Clean up the local credential helper config
-                        sh "git config --unset credential.helper"
                     }
                 }
             }
